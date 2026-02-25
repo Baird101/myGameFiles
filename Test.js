@@ -1,3 +1,3 @@
-var name = "bob";
+var names = "bob";
 
 var sealNum = 3;
