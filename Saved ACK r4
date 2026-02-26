@@ -1,0 +1,228 @@
+/**
+@Bugs - {
+ * When hitting a block too hard you go through it.
+ * No getitng spit out of a block when spawned in it.
+}
+@Todo - {
+ * Fix collisions
+ * Add block despawning/respawning
+}
+@Added_So_Far - {
+ * Initial block generation
+ * Most physics
+ * Block deletion on mouse press
+ * FPS improvement
+}
+**/
+
+
+// For loop protection {Made by Daniel (@dkareh) Protects loops from crashing the game
+(function() {return this;})().LoopProtector.prototype.leave = function() {};
+//} Variables {
+var lastLeft, lastRight, lastTop, lastBottom;
+var Blocks = [];
+var keys = [];
+var gravity = 0.3;
+var friction = 0.9;
+var camX = 0, camY = 0;
+var gridSize = 10;
+var brokenBlocks = {};
+var breakNum = 0;
+//} Functions {
+var Player = function(x,y,speed){
+    this.x = x;
+    this.y = y;
+    this.speed = 2;
+    this.acc = 0.1;
+    this.s = 10;
+    this.vx = 0;
+    this.vy = 0;
+    this.landed = false;
+    this.coyote = 0;
+};
+Player.prototype.d0 = function(){
+    if(dist(this.x,this.y,-camX+200,-camY+200)>20){
+        camX += round((width/2-(this.x + camX))/50);
+        camY += round((height/2-(this.y + camY))/50);
+        //background(255, 0, 0);
+    }
+    fill(this.col);
+    rect(this.x+camX, this.y+camY, this.s, this.s);
+    
+    if(keys[LEFT] || keys.a){
+        this.vx -= this.acc;
+    } else if(keys[RIGHT] || keys.d){
+        this.vx += this.acc;
+    } else {
+        this.vx *= friction;
+    }
+    if ((keys[UP] || keys.w) && this.coyote > 0) {
+        this.vy = -7;
+        this.coyote = 0;
+        this.landed = false;
+    } else if(keys[DOWN] || keys.s){
+        this.jumping = false;
+        this.vy += 0.2;
+    }
+    if (this.landed) {
+        this.vy *= friction; 
+        this.coyote = 40;
+    } else {
+        this.coyote--; 
+        this.vy += gravity;
+    }
+    
+    this.landed = false;
+    this.col=color(255, 255, 255);
+    
+    this.x += this.vx;
+    this.y += this.vy;
+    
+    this.vx = constrain(this.vx, -this.speed, this.speed);
+    this.vy = constrain(this.vy, -10, 10);
+};
+var Plater = new Player(200, 100);
+var Block = function(x,y,type){
+    this.x = x;
+    this.y = y;
+    this.type = type;
+    this.s = 10;
+};
+Block.prototype.draw = function() {
+    var X = this.x + camX;
+    var Y = this.y + camY;
+
+    // Break block
+    if (mouseIsPressed && mouseX > X - this.s/2 && mouseX < X + this.s/2 && mouseY > Y - this.s/2 && mouseY < Y + this.s/2) {
+        breakNum ++;
+        brokenBlocks[floor(this.x / gridSize) + "," + floor(this.y / gridSize)] = true;
+        return;
+    }
+    if (this.type === 1) {
+        fill(140, 78, 3);
+    } else if (this.type === 2) {
+        fill(156, 76, 2);
+    } else if (this.type === 3) {
+        fill(168, 81, 0);
+    } else if (this.type === 4) {
+        fill(189, 88, 0);
+    } else {
+        fill(179, 84, 0);
+    }
+
+    noStroke();
+    rect(X, Y, this.s, this.s);
+};
+Block.prototype.collide = function(entity) {
+    var X = this.x;
+    var Y = this.y;
+    var e = entity;
+    if(e.x + e.s/2 > X-this.s/2&&e.x-e.s/2 < X+this.s/2 &&e.y+e.s/2>Y-this.s/2&&e.y-e.s/2<Y +this.s/2){
+        this.col = color(255, 0, 0);
+        e.col=color(224, 224, 224);
+        var px = e.s/2+this.s/2-abs(e.x - X);
+        var py = e.s/2+this.s/2-abs(e.y - Y);
+        if (px < py) {
+            // Push left or right
+            if (e.x - this.x > 0) {
+                e.x += px;
+            } else {
+                e.x -= px;
+            }
+            e.vx = 0;
+        } else {
+            // Push up or down
+            if (e.y - this.y > 0) {
+                e.y += py;
+            } else {
+                Plater.landed = true;
+                e.y -= py;
+            }
+            e.vy = 0;
+        }
+    
+    } else {
+        this.col = color(255, 255, 255);
+    }
+};
+//} Input {
+keyPressed = function(){
+    keys[keyCode] = true;
+    keys[String(key).toLowerCase()] = true;
+};
+keyReleased = function(){
+    keys[keyCode] = false;
+    keys[String(key).toLowerCase()] = false;
+};
+//} Setup {
+frameRate(Infinity); // With this line un-commented I'm getting average 150fps on a PC
+//}
+draw = function() {
+    rectMode(CENTER);
+    background(166, 166, 166);
+    
+    var left   = floor((-camX) / gridSize) - 2;
+    var right  = floor((-camX + width) / gridSize) + 2;
+    var top    = floor((-camY) / gridSize) - 2;
+    var bottom = floor((-camY + height) / gridSize) + 2;
+    
+    // Only regenerate if camera grid changed
+    if (left !== lastLeft || right !== lastRight ||
+        top !== lastTop || bottom !== lastBottom) {
+    
+        Blocks = [];
+    
+        for (var i = left; i <= right; i++) {
+            for (var j = top; j <= bottom; j++) {
+    
+                var key = i + "," + j;
+                if (brokenBlocks[key]) {
+                    continue;
+                }
+                var Noise = noise(i * 0.05, j * 0.05);
+    
+                if (Noise < 0.48) {
+                    var type = 1;
+    
+                    if (Noise > 0.47) {
+                        type = 4;
+                    } else if (Noise > 0.45) {
+                        type = 5;
+                    } else if (Noise > 0.44) {
+                        type = 3;
+                    } else if (Noise > 0.4) {
+                        type = 2;
+                    }
+                    Blocks.push(new Block(
+                        i*gridSize + gridSize/2,
+                        j*gridSize + gridSize/2,
+                        type
+                    ));
+                }
+            }
+        }
+    
+        lastLeft = left;
+        lastRight = right;
+        lastTop = top;
+        lastBottom = bottom;
+    }
+    // Draw + collide
+    for (var k = 0; k < Blocks.length; k++) {
+        var b = Blocks[k];
+
+        b.draw();
+
+        if (dist(Plater.x, Plater.y, b.x, b.y) < 15) {
+            b.collide(Plater);
+        }
+    }
+
+    Plater.d0();
+
+    fill(0);
+    textSize(15);
+    text("Broken blockes: " + breakNum, 10, 20);
+    text("camX: " + camX + "\ncamY: "+camY, 10, 40);
+    text("FPS: "+~~this.__frameRate, 10, 75);
+};
